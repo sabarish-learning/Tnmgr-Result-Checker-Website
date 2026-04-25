@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TNMGRMU Statement of Marks</title>
+<style>
+body{font-family:"Times New Roman",serif;background:#f5f5f5;padding:20px;color:#000}
+.topbar{max-width:1150px;margin:0 auto 15px;display:flex;gap:10px;flex-wrap:wrap;font-family:Arial,sans-serif}
+input,select{padding:10px;border:1px solid #999;border-radius:4px;min-width:220px}
+button{padding:10px 15px;border:none;background:#000;color:#fff;cursor:pointer;border-radius:4px}
+button:disabled{opacity:.5;cursor:not-allowed}
+.status{max-width:1150px;margin:10px auto;font-family:Arial,sans-serif;color:#555}.err{color:#b91c1c}.ok{color:#15803d}
+.container{max-width:1150px;margin:auto;background:#fff;border:2px solid #000}
+.header{text-align:center;padding:10px;border-bottom:2px solid #000}.header h2{margin:0;font-size:16px}.header h3{margin:5px 0 0;font-size:14px}
+.info{font-size:13px}.info-row{display:grid;grid-template-columns:160px 1fr 140px 1fr;border-bottom:1px solid #000}.info-row div{padding:5px;border-right:1px solid #000}.info-row div:last-child{border-right:none}.label{font-weight:bold;background:#f2f2f2}
+.table{width:100%;border-collapse:collapse;font-size:12px}.table th,.table td{border:1px solid #000;padding:6px;vertical-align:middle}.table th{text-align:center;background:#eee}.subject-code{width:95px;text-align:center}.subject-name{width:420px}.mark{text-align:center;width:120px}.result{text-align:center;width:90px}.pass,.fail{font-weight:bold}.footer-note{font-size:11px;padding:8px;border-top:1px solid #000}
+@media print{body{background:white;padding:0}.topbar,.status{display:none}.container{max-width:100%;margin:0;border:2px solid #000}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <input id="regNo" placeholder="Registration No" value="520021509073">
+  <select id="termCode">
+    <option value="THIRD PROFESSIONAL PART-II" selected>THIRD PROFESSIONAL PART-II</option>
+    <option value="THIRD PROFESSIONAL PART-I">THIRD PROFESSIONAL PART-I</option>
+    <option value="SECOND PROFESSIONAL">SECOND PROFESSIONAL</option>
+    <option value="FIRST PROFESSIONAL">FIRST PROFESSIONAL</option>
+    <option value="FINAL PROFESSIONAL PART-II">FINAL PROFESSIONAL PART-II</option>
+    <option value="FINAL PROFESSIONAL PART-I">FINAL PROFESSIONAL PART-I</option>
+  </select>
+  <button id="showBtn" onclick="loadResult()">Show Result</button>
+  <button id="pdfBtn" onclick="downloadPDF()" disabled>Download PDF</button>
+</div>
+
+<div id="status" class="status"></div>
+<div id="result"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+const API='https://cms2api.tnmgrmu.ac.in/Api/index.php/StudentPreview/previewGradeMark';
+let lastReg='result';
+
+function setStatus(msg,cls=''){const el=document.getElementById('status');el.textContent=msg;el.className='status '+cls}
+function safe(v){return (v===undefined||v===null||v==='')?'-':String(v)}
+function num(v){const n=Number(v);return Number.isFinite(n)?n:0}
+function displayMark(obt,max){return `${safe(obt)} / ${safe(max)}`}
+
+async function loadResult(){
+  const reg=document.getElementById('regNo').value.trim();
+  const term=document.getElementById('termCode').value;
+  if(!reg){setStatus('Please enter registration number','err');return}
+
+  lastReg=reg;
+  document.getElementById('showBtn').disabled=true;
+  document.getElementById('pdfBtn').disabled=true;
+  setStatus('Loading result...');
+
+  try{
+    const url=`${API}?registration_no=${encodeURIComponent(reg)}&term_code=${encodeURIComponent(term)}`;
+    const res=await fetch(url);
+    const data=await res.json();
+    render(data,term);
+    setStatus('Result loaded successfully.','ok');
+    document.getElementById('pdfBtn').disabled=false;
+  }catch(e){
+    setStatus('Result not loading. API may be blocked/down. Use backend proxy if this happens online.','err');
+  }finally{
+    document.getElementById('showBtn').disabled=false;
+  }
+}
+
+function downloadPDF(){
+  const element=document.getElementById('marksheet');
+  if(!element){setStatus('Show result first.','err');return}
+  html2pdf().set({
+    margin:5,
+    filename:`TNMGRMU_Marksheet_${lastReg}.pdf`,
+    image:{type:'jpeg',quality:0.98},
+    html2canvas:{scale:2,useCORS:true},
+    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}
+  }).from(element).save();
+}
+
+function render(data,selectedTerm){
+  const r=data?.result?.[0];
+  if(!r){document.getElementById('result').innerHTML='';setStatus('No result found for selected registration number and term.','err');return}
+
+  let html=`
+  <div class="container" id="marksheet">
+    <div class="header">
+      <h2>THE TAMIL NADU Dr. M.G.R MEDICAL UNIVERSITY</h2>
+      <h3>STATEMENT OF MARKS</h3>
+    </div>
+
+    <div class="info">
+      <div class="info-row"><div class="label">Name</div><div>${safe(r.first_name)}</div><div class="label">Register No</div><div>${safe(r.registration_no)}</div></div>
+      <div class="info-row"><div class="label">Course</div><div>${safe(r.course)}</div><div class="label">Term</div><div>${safe(String(r.term || selectedTerm).trim())}</div></div>
+      <div class="info-row"><div class="label">Session</div><div>${safe(r.exam_session_name)}</div><div class="label">Exam Code</div><div>${safe(r.exam_code || r.examCode || r.exam_id || '-')}</div></div>
+    </div>
+
+    <table class="table">
+      <tr>
+        <th class="subject-code">CODE</th>
+        <th class="subject-name">SUBJECT</th>
+        <th class="mark">THEORY</th>
+        <th class="mark">IA TOTAL</th>
+        <th class="result">RESULT</th>
+      </tr>`;
+
+  (r.subject||[]).forEach(s=>{
+    const p=s.paper||{};
+    const theory=num(p.th_finl);
+    const theoryMax=num(p.th_max);
+
+    const iaTheory=num(p.iat_finl);
+    const iaPractical=num(p.iap_finl);
+    const iaTheoryMax=num(p.iat_max);
+    const iaPracticalMax=num(p.iap_max);
+
+    const iaTotal=iaTheory+iaPractical;
+    const iaMax=iaTheoryMax+iaPracticalMax;
+    const result=p.result||'-';
+
+    html+=`
+      <tr>
+        <td class="subject-code">${safe(s.subject_code)}</td>
+        <td>${safe(s.subject_name)}</td>
+        <td class="mark">${displayMark(theory,theoryMax)}</td>
+        <td class="mark">${displayMark(iaTotal,iaMax)}</td>
+        <td class="result ${result==='PASS'?'pass':'fail'}">${safe(result)}</td>
+      </tr>`;
+  });
+
+  html+=`</table>
+    <div class="footer-note">Unofficial preview. Verify with the official TNMGRMU result/marksheet.</div>
+  </div>`;
+
+  document.getElementById('result').innerHTML=html;
+}
+</script>
+</body>
+</html>
